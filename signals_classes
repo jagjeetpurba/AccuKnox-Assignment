@@ -1,0 +1,112 @@
+Django Signals 
+
+
+Answer 1 
+
+Django signals are executed synchronously. This means that when a signal is sent, all the connected 
+receivers are executed immediately within the same thread as the sender, blocking the flow until the 
+signal processing completes. 
+# signals.py 
+from django.db.models.signals import post_save 
+from django.dispatch import receiver 
+from django.contrib.auth.models import User 
+import time 
+@receiver(post_save, sender=User) 
+def user_saved_signal(sender, instance, **kwargs): 
+print("Signal received. Processing...") 
+time.sleep(5)  # Simulate a long task to test synchronization 
+print("Signal processing complete.") 
+# views.py 
+from django.contrib.auth.models import User 
+from django.http import HttpResponse 
+def create_user(request): 
+print("Creating user...") 
+user = User.objects.create(username='testuser') 
+print("User created.") 
+return HttpResponse("User created.") 
+
+
+Answer 2 
+
+Yes, Django signals run in the same thread as the caller by default. To demonstrate this, let’s write a 
+simple Django example that shows the thread ID of both the caller (view) and the signal handler 
+(receiver) to prove that they are in the same thread. 
+# signals.py 
+import threading 
+from django.db.models.signals import post_save 
+from django.dispatch import receiver 
+from django.contrib.auth.models import User 
+@receiver(post_save, sender=User) 
+def user_saved_signal(sender, instance, **kwargs): 
+print(f"Signal handler thread ID: {threading.get_ident()}") 
+print("Signal handler processing...") 
+# views.py 
+import threading 
+from django.contrib.auth.models import User 
+from django.http import HttpResponse 
+def create_user(request): 
+print(f"Caller thread ID: {threading.get_ident()}") 
+print("Creating user...") 
+user = User.objects.create(username='testuser') 
+print("User created.") 
+return HttpResponse("User created.") 
+
+
+Answer 3 
+
+Yes, Django signals by default run in the same database transaction as the caller, provided the 
+signal is triggered within a transaction. This means that if the transaction is rolled back, any 
+changes made by the signal handler will also be rolled back. 
+To prove this, let's create an example where we trigger a signal within a view that uses a 
+database transaction.  
+# signals.py 
+from django.db.models.signals import post_save 
+from django.dispatch import receiver 
+from django.contrib.auth.models import User 
+from myapp.models import Profile 
+@receiver(post_save, sender=User) 
+def create_profile_for_user(sender, instance, **kwargs): 
+print("Signal received. Creating profile...") 
+Profile.objects.create(user=instance) 
+print("Profile created.") 
+# views.py 
+from django.contrib.auth.models import User 
+from django.db import transaction 
+from django.http import HttpResponse 
+def create_user_and_rollback(request): 
+try: 
+        with transaction.atomic(): 
+            print("Creating user...") 
+            user = User.objects.create(username='testuser') 
+            print("User created.") 
+             
+            # Manually raise an exception to trigger a rollback 
+            raise Exception("Forcing rollback after user creation") 
+    except Exception as e: 
+        print(f"Transaction rolled back: {str(e)}") 
+ 
+    return HttpResponse("Transaction completed.") 
+After the exception, neither the User nor the Profile will be present in the database, proving that the 
+signal actions were also rolled back with the transaction. 
+
+
+
+Custom Classes in Python 
+
+
+class Rectangle: 
+    def __init__(self, length: int, width: int): 
+        self.length = length 
+        self.width = width 
+    def __iter__(self): 
+        yield {'length': self.length} 
+        yield {'width': self.width} 
+ 
+# Example usage: 
+rect = Rectangle(10, 5) 
+ 
+for dimension in rect: 
+    print(dimension) 
+Output: 
+{'length': 10} 
+{'width': 5} 
